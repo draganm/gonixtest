@@ -19,25 +19,8 @@
         # Derived full version
         goVersion = "${goMajor}.${goMinor}.${goPatch}";
 
-        # Version lookup map
-        goVersions = {
-          "1.23" = {
-            "3" = {
-              sha256 = "sha256-jWp3MySHVXxq+iQhExtQ+D20rjxXnDvHLmcO4faWhZk=";
-            };
-            "4" = {
-              sha256 = "sha256-rTRaxCHpCBQpOpaZzKGd1SOCUcP2h5gLvK4oSVsmNTE=";
-            };
-          };
-          "1.22" = {
-            "0" = {
-              sha256 = "sha256-XXXXX"; # Replace with actual hash for 1.22.0
-            };
-            "1" = {
-              sha256 = "sha256-XXXXX"; # Replace with actual hash for 1.22.1
-            };
-          };
-        };
+        # Read version lookup map from JSON
+        goVersions = builtins.fromJSON (builtins.readFile ./go-versions.json);
 
         # Helper function to get SHA for a version
         getGoSha = { major, minor, patch }:
