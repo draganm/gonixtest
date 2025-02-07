@@ -20,7 +20,7 @@
             sha256 = "sha256-jWp3MySHVXxq+iQhExtQ+D20rjxXnDvHLmcO4faWhZk=";
           };
 
-          nativeBuildInputs = [ pkgs.go_1_22 pkgs.cacert ];  # Using Go 1.20 as bootstrap
+          nativeBuildInputs = [ pkgs.go_1_22 pkgs.cacert ];  # Using Go 1.22 as bootstrap
           
           buildPhase = ''
             export GOROOT_BOOTSTRAP=${pkgs.go_1_22}/share/go
@@ -50,6 +50,13 @@
         packages = {
           default = go_1_23_3;
           go = go_1_23_3;
+        };
+
+        devShells.default = pkgs.mkShell {
+          buildInputs = [ go_1_23_3 ];
+          shellHook = ''
+            export PATH=${go_1_23_3}/bin:$PATH
+          '';
         };
       }
     );
