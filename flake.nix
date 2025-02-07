@@ -19,6 +19,34 @@
         # Derived full version
         goVersion = "${goMajor}.${goMinor}.${goPatch}";
 
+        # Version lookup map
+        goVersions = {
+          "1.23" = {
+            "3" = {
+              sha256 = "sha256-jWp3MySHVXxq+iQhExtQ+D20rjxXnDvHLmcO4faWhZk=";
+            };
+            "4" = {
+              sha256 = "sha256-rTRaxCHpCBQpOpaZzKGd1SOCUcP2h5gLvK4oSVsmNTE=";
+            };
+          };
+          "1.22" = {
+            "0" = {
+              sha256 = "sha256-XXXXX"; # Replace with actual hash for 1.22.0
+            };
+            "1" = {
+              sha256 = "sha256-XXXXX"; # Replace with actual hash for 1.22.1
+            };
+          };
+        };
+
+        # Helper function to get SHA for a version
+        getGoSha = { major, minor, patch }:
+          if builtins.hasAttr "${major}.${minor}" goVersions then
+            if builtins.hasAttr patch goVersions."${major}.${minor}" then
+              goVersions."${major}.${minor}"."${patch}".sha256
+            else throw "Unknown patch version ${patch} for Go ${major}.${minor}"
+          else throw "Unknown Go version ${major}.${minor}";
+
         # Function to create Go derivation
         mkGo = { major, minor, patch }:
           pkgs.stdenv.mkDerivation {
@@ -27,8 +55,7 @@
 
             src = pkgs.fetchurl {
               url = "https://go.dev/dl/go${major}.${minor}.${patch}.src.tar.gz";
-              # Note: sha256 will need to be updated for different versions
-              sha256 = "sha256-jWp3MySHVXxq+iQhExtQ+D20rjxXnDvHLmcO4faWhZk=";
+              sha256 = getGoSha { inherit major minor patch; };
             };
 
             nativeBuildInputs =
@@ -64,6 +91,13 @@
           minor = goMinor;
           patch = goPatch;
         };
+
+        # Create a shell-specific Go version with patch 4
+        shellGo = mkGo {
+          major = goMajor;
+          minor = goMinor;
+          patch = "4";
+        };
       in {
         packages = {
           default = go;
@@ -71,9 +105,9 @@
         };
 
         devShells.default = pkgs.mkShell {
-          buildInputs = [ go ];
+          buildInputs = [ shellGo ];
           shellHook = ''
-            export PATH=${go}/bin:$PATH
+            export PATH=${shellGo}/bin:$PATH
           '';
         };
       });
