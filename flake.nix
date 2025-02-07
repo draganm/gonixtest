@@ -11,10 +11,13 @@
       let
         pkgs = import nixpkgs { inherit system; };
 
-        # Version parameters with defaults
-        goMajor = 1;
-        goMinor = 23;
-        goPatch = 3;
+        # Read latest version from JSON
+        latestVersion = builtins.fromJSON (builtins.readFile ./latest-version.json);
+
+        # Version parameters with defaults (latest stable version)
+        goMajor = latestVersion.major;
+        goMinor = latestVersion.minor;
+        goPatch = latestVersion.patch;
 
         # Helper function to get SHA for a version
         getGoSha = { major, minor, patch }:
@@ -104,8 +107,8 @@
         # Create a shell-specific Go version
         shellGo = mkGo {
           major = 1;
-          minor = 15;
-          patch = 9;
+          minor = 20;
+          patch = 1;
         };
       in {
         packages = {

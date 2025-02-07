@@ -28,6 +28,13 @@ type GoVersion struct {
 	Files   []GoFile `json:"files"`
 }
 
+// Latest version info to be written to latest-version.json
+type LatestVersion struct {
+	Major int `json:"major"`
+	Minor int `json:"minor"`
+	Patch int `json:"patch"`
+}
+
 // convertToSRI converts a regular hex SHA256 to SRI format
 func convertToSRI(hexHash string) string {
 	// Decode hex string to bytes
@@ -72,6 +79,8 @@ func main() {
 		}
 	}
 
+	var latestStable *LatestVersion
+
 	// Process each version
 	for _, version := range versions {
 		// Skip unstable versions
@@ -95,26 +104,36 @@ func main() {
 		// Parse version string (strip 'go' prefix)
 		versionStr := strings.TrimPrefix(version.Version, "go")
 		major, minor, patch := parseVersion(versionStr)
-		if major == "" || minor == "" || patch == "" {
+		if major == 0 || minor == 0 {
 			continue
 		}
 
+		// Update latest stable version if this is newer
+		if latestStable == nil || isNewer(major, minor, patch, latestStable) {
+			latestStable = &LatestVersion{
+				Major: major,
+				Minor: minor,
+				Patch: patch,
+			}
+		}
+
 		// Skip if we already have this version
-		majorMinor := fmt.Sprintf("%s.%s", major, minor)
+		majorMinor := fmt.Sprintf("%d.%d", major, minor)
 		if _, exists := versionMap[majorMinor]; !exists {
 			versionMap[majorMinor] = make(map[string]VersionInfo)
 		}
-		if _, exists := versionMap[majorMinor][patch]; exists {
+		patchStr := fmt.Sprintf("%d", patch)
+		if _, exists := versionMap[majorMinor][patchStr]; exists {
 			continue
 		}
 
 		// Convert hash to SRI format and add to version map
 		sriHash := convertToSRI(sourceFile.SHA256)
-		versionMap[majorMinor][patch] = VersionInfo{
+		versionMap[majorMinor][patchStr] = VersionInfo{
 			SHA256: fmt.Sprintf("sha256-%s", sriHash),
 		}
 
-		fmt.Printf("Added version %s.%s.%s with SHA256: %s\n", major, minor, patch, sriHash)
+		fmt.Printf("Added version %d.%d.%d with SHA256: %s\n", major, minor, patch, sriHash)
 	}
 
 	// Write updated version map
@@ -127,6 +146,22 @@ func main() {
 	if err := os.WriteFile("go-versions.json", data, 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing go-versions.json: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Write latest version info
+	if latestStable != nil {
+		latestData, err := json.MarshalIndent(latestStable, "", "  ")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error marshaling latest version: %v\n", err)
+			os.Exit(1)
+		}
+
+		if err := os.WriteFile("latest-version.json", latestData, 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing latest-version.json: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("\nLatest stable version: %d.%d.%d\n", latestStable.Major, latestStable.Minor, latestStable.Patch)
 	}
 }
 
@@ -151,10 +186,29 @@ func fetchGoVersions() ([]GoVersion, error) {
 	return versions, nil
 }
 
-func parseVersion(version string) (major, minor, patch string) {
+func parseVersion(version string) (major, minor, patch int) {
 	parts := strings.Split(version, ".")
 	if len(parts) != 3 {
-		return "", "", ""
+		return 0, 0, 0
 	}
-	return parts[0], parts[1], parts[2]
+	fmt.Sscanf(parts[0], "%d", &major)
+	fmt.Sscanf(parts[1], "%d", &minor)
+	fmt.Sscanf(parts[2], "%d", &patch)
+	return
+}
+
+func isNewer(major, minor, patch int, current *LatestVersion) bool {
+	if major > current.Major {
+		return true
+	}
+	if major < current.Major {
+		return false
+	}
+	if minor > current.Minor {
+		return true
+	}
+	if minor < current.Minor {
+		return false
+	}
+	return patch > current.Patch
 }
