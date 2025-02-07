@@ -12,42 +12,68 @@
         pkgs = import nixpkgs { inherit system; };
 
         # Version parameters with defaults
-        goMajor = "1";
-        goMinor = "23";
-        goPatch = "3";
+        goMajor = 1;
+        goMinor = 23;
+        goPatch = 3;
 
-        # Derived full version
-        goVersion = "${goMajor}.${goMinor}.${goPatch}";
+        # Helper function to get SHA for a version
+        getGoSha = { major, minor, patch }:
+          let
+            majorStr = toString major;
+            minorStr = toString minor;
+            patchStr = toString patch;
+          in
+          if builtins.hasAttr "${majorStr}.${minorStr}" goVersions then
+            if builtins.hasAttr patchStr goVersions."${majorStr}.${minorStr}" then
+              goVersions."${majorStr}.${minorStr}"."${patchStr}".sha256
+            else throw "Unknown patch version ${patchStr} for Go ${majorStr}.${minorStr}"
+          else throw "Unknown Go version ${majorStr}.${minorStr}";
 
         # Read version lookup map from JSON
         goVersions = builtins.fromJSON (builtins.readFile ./go-versions.json);
 
-        # Helper function to get SHA for a version
-        getGoSha = { major, minor, patch }:
-          if builtins.hasAttr "${major}.${minor}" goVersions then
-            if builtins.hasAttr patch goVersions."${major}.${minor}" then
-              goVersions."${major}.${minor}"."${patch}".sha256
-            else throw "Unknown patch version ${patch} for Go ${major}.${minor}"
-          else throw "Unknown Go version ${major}.${minor}";
+        # Helper function to validate version is >= 1.13
+        validateVersion = { major, minor, patch }:
+          if major != 1 then throw "Only Go 1.x versions are supported"
+          else if minor < 13 then throw "Only Go versions >= 1.13 are supported"
+          else true;
 
         # Function to create Go derivation
         mkGo = { major, minor, patch }:
+          let
+            # Convert to strings for URL and version string
+            versionStr = "${toString major}.${toString minor}.${toString patch}";
+            
+            # Check if version is compatible with darwin_arm64
+            isDarwinArm64 = system == "aarch64-darwin";
+            isPreM1Version = minor < 16 || (minor == 16 && patch < 1);
+            
+            # Throw error for incompatible darwin_arm64 builds
+            checkDarwinArm64Compatibility = 
+              if isDarwinArm64 && isPreM1Version then
+                throw "Go ${versionStr} does not support darwin_arm64 (Apple Silicon). Please use Go 1.16.1 or later."
+              else true;
+          in
+          # Validate version and platform compatibility
+          assert validateVersion { inherit major minor patch; };
+          assert checkDarwinArm64Compatibility;
           pkgs.stdenv.mkDerivation {
             pname = "go";
-            version = "${major}.${minor}.${patch}";
+            version = versionStr;
 
             src = pkgs.fetchurl {
-              url = "https://go.dev/dl/go${major}.${minor}.${patch}.src.tar.gz";
+              url = "https://go.dev/dl/go${versionStr}.src.tar.gz";
               sha256 = getGoSha { inherit major minor patch; };
             };
 
-            nativeBuildInputs =
-              [ pkgs.go_1_22 pkgs.cacert ]; # Using Go 1.22 as bootstrap
+            nativeBuildInputs = [ pkgs.go_1_22 pkgs.cacert ];
 
             buildPhase = ''
+              # Set up environment
               export GOROOT_BOOTSTRAP=${pkgs.go_1_22}/share/go
               export GOCACHE=$TMPDIR/go-cache
               export GOROOT_FINAL=$out/share/go
+              
               cd src
               ./make.bash
             '';
@@ -75,11 +101,11 @@
           patch = goPatch;
         };
 
-        # Create a shell-specific Go version with patch 4
+        # Create a shell-specific Go version
         shellGo = mkGo {
-          major = goMajor;
-          minor = goMinor;
-          patch = "4";
+          major = 1;
+          minor = 15;
+          patch = 9;
         };
       in {
         packages = {
