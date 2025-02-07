@@ -111,6 +111,11 @@
           patch = 1;
         };
       in {
+        # Expose the mkGo function in lib
+        lib = {
+          inherit mkGo;
+        };
+
         packages = {
           default = go;
           go = go;
