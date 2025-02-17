@@ -107,8 +107,8 @@
         # Create a shell-specific Go version
         shellGo = mkGo {
           major = 1;
-          minor = 20;
-          patch = 1;
+          minor = 24;
+          patch = 0;
         };
       in {
         # Expose the mkGo function in lib
